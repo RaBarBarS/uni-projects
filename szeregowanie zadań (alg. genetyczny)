@@ -1,0 +1,549 @@
+// OK.cpp : Ten plik zawiera funkcję „main”. W nim rozpoczyna się i kończy wykonywanie programu.
+//
+
+#include "stdafx.h"
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <stdlib.h>
+#include <vector>
+#include <algorithm>
+#include <math.h>
+#include <time.h>
+#include <ctime>
+#include <stdio.h> 
+
+using namespace std;
+
+clock_t start, stop;
+double workingTime = 1;	//czas w sekundach
+const int problemSize = 5;
+const int populationSize = 100;
+const float probability = 0.09;
+const float penaltyPercent = 0.1;
+int breakLen = 0;
+int problem[2][problemSize];
+float populationTimes[populationSize];
+vector<vector<vector<int>>> solution;
+vector<int>parents;
+int maintenance = populationSize + 1;
+
+
+void troublemaker() {
+	//srand(time(NULL));
+	int sum = 0;
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < problemSize; j++) {
+			problem[i][j] = rand() % 5 + 1;	//długość zadań
+			sum += problem[i][j];
+			cout << problem[i][j] << ' ';
+		}
+		cout << endl;
+	}
+	cout << endl;
+	breakLen = (sum / (2 * problemSize))*1.5;
+	cout << breakLen << endl;
+}
+
+void troublemakerVOL2() {	//generuje zadania o zadanej sumie czasów
+	int allIWant = 100;	//docelowa suma zadń
+	int sum = 0;
+	srand(time(NULL));
+
+	for (int i = 0; i < 2; i++) {	//aby zadania były większe od zera
+		for (int j = 0; j < problemSize; j++) {
+			problem[i][j] = 1;
+			sum++;
+		}
+	}
+	while (sum < allIWant) {
+		int x = rand() % 2;
+		int y = rand() % populationSize;
+		problem[x][y]++;
+		sum++;
+	}
+	//cout << endl << sum << endl;
+	breakLen = (allIWant / populationSize)*1.5;
+}
+
+void greaterTroublemaker() {
+	srand(time(NULL));
+	int number = 0;
+	int helper[2][problemSize];
+	for (int k = 0; k < 2; k++) {
+		for (int m = 0; m < problemSize; m++) {
+			helper[k][m] = m;
+		}
+	}
+	for (int i = 0; i < populationSize; i++) {
+		vector<vector<int>>container;
+		cout << "osobnik " << i << endl;
+		for (int j = 0; j < 2; j++) {
+			vector<int>subcontainer;
+			random_shuffle(&helper[j][0], &helper[j][problemSize]);
+			for (int k = 0; k < problemSize; k++) {
+				subcontainer.push_back(helper[j][k]);
+				cout << helper[j][k] << ' ';
+			}
+			container.push_back(subcontainer);
+			cout << endl;
+		}
+		solution.push_back(container);
+	}
+}
+
+void couldHaveBeenBetter() {
+	for (int machine = 0; machine < populationSize; machine++) {
+		float time1m = 0, penalty = 0, time2m = 0;
+		for (int i = 0; i < solution[machine][0].size(); i++) {
+			time1m = time1m * 2 + problem[0][solution[machine][0][i]];
+		}
+		for (int i = 0; i < solution[machine][1].size(); i++) {
+			if (solution[machine][1][i] != maintenance && solution[machine][1][i] > 0) {
+				time2m = time2m * 2 + problem[1][solution[machine][1][i]] * (penalty + 1);
+				penalty += penaltyPercent;
+			}
+			else if (solution[machine][1][i] < 0) {
+				time2m += (solution[machine][1][i] * -1);
+			}
+			else {
+				time2m += breakLen;
+				penalty = 0;
+			}
+		}
+		populationTimes[machine] = time1m + time2m;
+	}
+	/*int theBest, theBestTime = populationTimes[0];
+	for (int i = 0; i < populationSize; i++) {
+		if (populationTimes[i] < theBestTime) {
+			theBestTime = populationTimes[i];
+			theBest = i;
+		}
+	}
+	cout << theBestTime << endl;
+	*/
+}
+
+void debugMePlz() {
+	for (int s = 0; s < populationSize; s++) {
+		int time1m = 0, time2m = 0, currentMaintenance = 0, idle = 0;
+		float breakProbability = 0;
+		bool tab[problemSize];
+		bool isThatAll = false;
+
+		for (int i = 0; i < problemSize; i++) {
+			tab[i] = false;
+		}
+
+		//if (s == 73)
+			//cout << " ";
+
+		vector<int> helper;
+		for (int i = 0, j = 0; i < solution[s][0].size(); i++, j++) {
+
+			time1m += problem[0][solution[s][0][i]];	//liczy czas 1 maszyny
+
+			if (i == 0) {
+				helper.push_back((problem[0][solution[s][0][0]] * -1));
+				time2m += problem[0][solution[s][0][i]];
+				idle++;	j++;
+
+				helper.push_back(solution[s][0][i]);
+				time2m += problem[1][solution[s][0][i]];
+				breakProbability += probability;
+				tab[solution[s][0][i]] = true;
+			}
+			else {
+				//wstawia randomowo przerwy, bo inaczej były by tylko te konieczne
+				float x = (rand() % 100) / 100.0;
+				if (x <= breakProbability) {
+					helper.push_back(maintenance);
+					currentMaintenance++; j++;
+					time2m += breakLen;
+					breakProbability = 0.0;
+				}
+				//jeśli sprawdzanie maszyny 1 bardzo wyprzedza sprawdzanie 2 to zrównaj mierwszą odpowiednio
+				if ((time1m - problem[0][solution[s][0][i]]) > time2m) {
+					time1m -= problem[0][solution[s][0][i]];
+					i--;
+				}
+				if (time1m > time2m) {
+					if (i + currentMaintenance + idle - j <= 0) {	//jeśli w sumie zadań z 1 i przerw jest nie więcej niż rzeczy na 2 to znaczy że nie masz 
+															//co dopisać i uzupełnij 2 przerwami aż będzie można dopisać kolejne zadanie
+						helper.push_back(((time1m - time2m) * -1));
+						time2m += (time1m - time2m);
+						idle++; j++;
+						helper.push_back(solution[s][0][i]);
+						tab[solution[s][0][i]] = true;
+						time2m += problem[1][solution[s][0][i]];
+						breakProbability += probability;
+					}
+					else {
+						int first = problemSize;
+						for (int d = 0; d < i; d++) {//=i żeby szukać tylko z dostępnych
+							if (tab[solution[s][0][d]] == 0) {
+								for (int c = 0; c < problemSize; c++) {
+									if (solution[s][1][c] == solution[s][0][d]) {
+										if (first > c)first = c;
+										break;//bo tylko jedno wystąpienie w całym rozwiązaniu wiec po co tracić czas
+									}
+								}
+							}
+						}
+						helper.push_back(solution[s][1][first]);
+						tab[solution[s][1][first]] = true;
+						time2m += problem[1][solution[s][1][first]];
+						breakProbability += probability;
+					}
+				}
+				else if (time1m < time2m) {
+						bool stop = false;
+					while (i < solution[s][0].size() - 1 && !stop) {
+						if (time1m + problem[0][solution[s][0][i + 1]] <= time2m) {
+							i++;	//jeśli maszyna 2 bardzo wyprzedziła to fajno było by dorzucić rzeczy do maszyny pierwszej i mieć większy wybór zadań na maszynę 2
+							time1m += problem[0][solution[s][0][i]];
+						}
+						else { stop = true; }
+					}
+					int first = problemSize;
+					for (int d = i; d >= 0; d--) {//=i żeby szukać tylko z dostępnych
+						if (tab[solution[s][0][d]] == 0) {
+							for (int c = 0; c < problemSize; c++) {
+								if (solution[s][1][c] == solution[s][0][d]) {
+										if (first > c)first = c;
+										break;//bo tylko jedno wystąpienie w całym rozwiązaniu wiec po co tracić czas
+								}
+							}
+						}
+					}
+					helper.push_back(solution[s][1][first]);
+					tab[solution[s][1][first]] = true;
+					time2m += problem[1][solution[s][1][first]];
+					breakProbability += probability;
+				}
+				else {
+					helper.push_back(solution[s][0][i]);
+					tab[solution[s][0][i]] = true;
+					time2m += problem[1][solution[s][0][i]];
+					breakProbability += probability;
+				}
+			}
+			if (i == solution[s][0].size() - 1) {//jeśli to ostatnia iteracja
+				for (int h = 0; h < problemSize; h++) {
+					if (tab[h] == 0) {
+						isThatAll = false;
+						break;
+					}
+					isThatAll = true;
+				}
+				while (!isThatAll) {
+					float x = (rand() % 100) / 100.0;
+					if (x <= breakProbability) {
+						helper.push_back(maintenance);
+						currentMaintenance++; j++;
+						time2m += breakLen;
+						breakProbability = 0.0;
+					}
+					int first = solution[s][1].size();
+					for (int d = 0, m = 0; d < problemSize && m < solution[s][0].size(); d++, m++) {	//dwie zmienne żeby pomijać przerwy
+						if (solution[s][0][m] == maintenance) {
+							d--;
+						}
+						else {
+							if (tab[solution[s][0][m]] == 0) {
+								for (int c = 0; c < solution[s][1].size(); c++) {
+									if (solution[s][1][c] == solution[s][0][m]) {
+										if (first > c)
+											first = c;
+										break;//bo tylko jedno wystąpienie w całym rozwiązaniu wiec po co tracić czas
+									}
+								}
+							}
+						}
+					}
+					helper.push_back(solution[s][1][first]);
+					tab[solution[s][1][first]] = true;
+					time2m += problem[1][solution[s][1][first]];
+					breakProbability += probability;
+					for (int h = 0; h < problemSize; h++) {
+							if (tab[h] == 0) {
+								isThatAll = false;
+								break;
+							}
+							isThatAll = true;
+					}
+				}
+			}
+		}
+		solution[s][1].clear();
+		solution[s].erase(solution[s].begin() + 1);
+		solution[s].push_back(helper);
+	}	
+}
+
+void russianRoulette() {
+	parents.clear();
+	float sum = 0;
+	float probabilitySum = 0;
+	float bullets[populationSize];	
+	for (int i = 0; i < populationSize; i++) {
+		sum += populationTimes[i];
+	}
+	for (int i = 0; i < populationSize; i++) {
+		bullets[i] = 1 - (populationTimes[i] / sum);	//bo krótki czas jest lepszy czyli powinien mieć większe prawdopodobieństwo
+		probabilitySum += bullets[i];	//bo prawdopodo nie zsumują się do jedynki...
+	}
+	for (int i = 0; i < 10; i++) {	//ustalanie ilości rodziców
+		float x = fmod((double)(rand() / 100.0), probabilitySum);	//losowanie z przedziału 0 suma prawdopodo
+		int j = 0;
+		sum = 0;
+		while (sum < x) {
+			sum += bullets[j];
+			j++;
+		}
+		if (j == populationSize)j--; //żeby nei przyjmował wartości za dużych
+		vector<int>::iterator it;
+		it = find(parents.begin(), parents.end(), j);
+		if ( it != parents.end()) {	//spr czy ten rodzić już był wylosowany czy nie
+			i--;	//jak tak to zmniejsz i zeby więcej powtórzeń
+		}
+		else {
+			parents.push_back(j);
+		}
+	}
+}
+
+void russianRoulette2() {
+	parents.clear();
+	float sum = 0;
+	float probabilitySum = 0;
+	float bullets[populationSize];
+	for (int i = 0; i < populationSize; i++) {
+		sum += populationTimes[i];
+	}
+	for (int i = 0; i < populationSize; i++) {
+		bullets[i] = (1 - (populationTimes[i] / sum))/sum;	//bo krótki czas jest lepszy czyli powinien mieć większe prawdopodobieństwo
+		probabilitySum += bullets[i];	//bo prawdopodo nie zsumują się do jedynki...
+	}
+	for (int i = 0; i < 10; i++) {	//ustalanie ilości rodziców
+		float x = fmod((double)(rand() / 100.0), probabilitySum);	//losowanie z przedziału 0 suma prawdopodo
+		int j = 0;
+		sum = 0;
+		while (sum < x) {
+			sum += bullets[j];
+			j++;
+		}
+		if (j == populationSize)j--; //żeby nei przyjmował wartości za dużych
+		vector<int>::iterator it;
+		it = find(parents.begin(), parents.end(), j);
+		if (it != parents.end()) {	//spr czy ten rodzić już był wylosowany czy nie
+			i--;	//jak tak to zmniejsz i zeby więcej powtórzeń
+		}
+		else {
+			parents.push_back(j);
+		}
+	}
+}
+
+void speedDating() {
+	int parent1, parent2;
+	for (int i = 0; i < populationSize; i++) {
+		parent1 = rand() % parents.size();
+		parent2 = rand() % parents.size();
+		while(parent1==parent2)	parent2 = rand() % parents.size();
+		for (int k = 0; k < 2; k++) {
+			vector<int>container;
+			bool tab[problemSize];
+			for (int i = 0; i < problemSize; i++) {
+				tab[i] = false;
+			}
+			bool isThatAll = false;
+			for (int j = 0, m = 0; j < problemSize / 2 + 1, m < solution[parent1][k].size(); j++, m++) {
+				if (j < problemSize / 2) {
+					if (solution[parent1][k][m] == maintenance || solution[parent1][k][m] < 0) {
+						j--;
+					}
+					else {
+					container.push_back(solution[parent1][k][m]);
+					tab[solution[parent1][k][m]] = true;
+					}
+				}
+				else {	//dopisywanie kolejnosci drugiego rodzica 
+					for (int i = 0; i < problemSize; i++) {
+						if (tab[i] == 0) {
+							isThatAll = false;
+							break;
+						}
+						isThatAll = true;
+					}
+					while (!isThatAll) {
+						int first = solution[parent2][k].size();
+						for (int d = 0, m = 0; d < problemSize, m < solution[parent2][k].size(); d++, m++) {//=i żeby szukać tylko z dostępnych
+							if (solution[parent2][k][m] == maintenance || solution[parent2][k][m] < 0) {
+								d--;
+							}
+							else {
+								if (tab[solution[parent2][k][m]] == 0) {
+									if(first>m)
+										first = m;
+								}
+							}
+						}
+						container.push_back(solution[parent2][k][first]);
+						tab[solution[parent2][k][first]] = true;
+						for (int i = 0; i < problemSize; i++) {
+							if (tab[i] == 0) {
+								isThatAll = false;
+								break;
+							}
+							isThatAll = true;
+						}
+					}
+				}
+			}
+			solution[i].push_back(container);
+		}
+		solution[i].erase(solution[i].begin(), solution[i].begin() + 2);
+	}
+}
+
+void lilMutation() {
+	for (int i = 0; i < populationSize; i++) {
+		for (int j = 0; j < 2; j++) {
+			int mutation = rand() % (problemSize / 2);	//ilość wprowadzonych mutacji, ale nei więcej niż połowa ilości zadań
+			for (int h = 0; h < mutation; h++) {
+				int x = rand() % (problemSize - 1);
+				int tmp = solution[i][j][x];
+				solution[i][j][x] = solution[i][j][x + 1];
+				solution[i][j][x + 1] = tmp;
+			}
+		}
+	}
+}
+
+void saveItAndNeverUseItDebugVersion() {
+	fstream file;
+	file.open("lubiePlacki.txt", ios::out);
+	int theBest = 0;
+	float theBestTime = populationTimes[0];	//przypisanie randomowego czasu bo nie zera
+
+	for (int i = 0; i < populationSize; i++) {
+		if (populationTimes[i] < theBestTime) {
+			theBestTime = populationTimes[i];
+			theBest = i;
+		}
+	}
+
+	file << "kolejne czasy operacji na maszynie pierwszej:" << endl;
+	for (int i = 0; i < problemSize; i++) {
+		file << i << ": " << (problem[0][i]) << "|";
+	}
+	file << endl << "kolejne czasy operacji na maszynie drugiej:" << endl;
+	for (int i = 0; i < problemSize; i++) {
+		file << i << ": " << (problem[1][i]) << "|";
+	}
+	file << endl << "najlepszy czas uszeregowania: " << theBestTime << ", " << theBest;
+	file << endl << "uszeregowanie maszyny pierwszej:" << endl;
+	for (int i = 0; i < problemSize; i++) {
+		//file << (solution[theBest][0][i]) << ": " << (problem[0][solution[theBest][0][i]]) << "|";
+		file << (solution[theBest][0][i]) << "|";	//do testów
+	}
+	file << endl << "uszeregowanie maszyny drugiej:" << endl;
+	for (int i = 0; i < solution[theBest][1].size(); i++) {
+		/*if (solution[theBest][1][i] == maintenance) {
+			file << (solution[theBest][1][i]) << ": " << breakLen << "|";
+		}
+		else {
+			file << (solution[theBest][1][i]) << ": " << (problem[1][solution[theBest][1][i]]) << "|";
+		}*/
+		if (solution[theBest][1][i] == maintenance) {	//do testów
+			file << "maintenance" << "|";
+		}
+		else if(solution[theBest][1][i] < 0){
+			file << "idle: " << (solution[theBest][1][i] * -1) << "|";
+		}
+		else{
+			file << (solution[theBest][1][i]) << "|";
+		}
+	}
+	file.close();
+}
+
+void saveItAndNeverUseIt() {
+	fstream file;
+	file.open("lubiePlacki.txt", ios::out);
+	int theBest = 0;
+	float realTime = 0;
+	int maintenanceCount = 0, idleCount = 0, maintenanceTime = 0;
+	float penalty = 0, idleTime = 0;
+	float theBestTime = populationTimes[0];	//przypisanie randomowego czasu bo nie zera
+
+	for (int i = 0; i < populationSize; i++) {
+		if (populationTimes[i] < theBestTime) {
+			theBestTime = populationTimes[i];
+			theBest = i;
+		}
+	}
+	file << theBestTime << endl;
+	file << "M1: ";
+	for (int i = 0; i < solution[theBest][0].size(); i++) {
+		file << "op1_" << solution[theBest][0][i] << ", " << realTime << ", " << problem[0][solution[theBest][0][i]] << ", " << (problem[0][solution[theBest][0][i]] * (penalty + 1)) << "; ";
+		penalty+=penaltyPercent;
+		realTime += problem[0][solution[theBest][0][i]];
+	}
+	file << endl;
+	penalty = 0; realTime = 0;
+	file << "M2: ";
+	for (int i = 0; i < solution[theBest][1].size(); i++) {
+		if (solution[theBest][1][i] == maintenance) {
+			penalty = 0;	maintenanceCount++;	maintenanceTime += breakLen;
+			file << "maint" << maintenanceCount << " ," << realTime << " ," << breakLen << "; ";
+			realTime += breakLen;
+		}
+		else if (solution[theBest][1][i] < 0) {
+			idleCount++;	idleTime += (solution[theBest][1][i] * -1);
+			file << "idle" << idleCount << " ," << realTime << ", " << (solution[theBest][1][i] * -1) << "; ";
+			realTime += (solution[theBest][1][i] * -1);
+		}
+		else {
+			file << "op2_" << solution[theBest][1][i] << ", " << realTime << ", " << problem[1][solution[theBest][1][i]] << ", " << (problem[1][solution[theBest][1][i]] * (penalty + 1)) << "; ";
+			penalty+=penaltyPercent;
+			realTime += problem[1][solution[theBest][1][i]];
+		}
+	}
+	file << endl;
+	file << "laczna ilosc przerw na maszynie pierwszej: 0" << endl;
+	file << "laczna ilosc przerw na maszynie drugiej: " << maintenanceCount << ", sumaryczny czas: " << maintenanceTime << endl;
+	file << "laczna ilosc przerw typu idle na maszynie pierwszej: 0" << endl;
+	file << "laczna ilosc przerw typu idle na maszynie pierwszej: " << idleCount << ", sumaryczny czas: " << idleTime << endl;
+
+	file.close();
+}
+
+
+int main()
+{
+	bool timeIsOver = false;
+	//int timeIsOver = 0;
+
+	troublemaker();
+	//troublemakerVOL2();
+	greaterTroublemaker();
+
+	start = clock();
+	debugMePlz();
+	couldHaveBeenBetter();
+	while (!timeIsOver /*timeIsOver < 1000*/) {
+		russianRoulette2();
+		speedDating();
+		lilMutation();
+		debugMePlz();
+		couldHaveBeenBetter();
+		stop = clock();
+		if (workingTime <= ((double)(stop - start) / CLOCKS_PER_SEC)) timeIsOver = true;
+		//timeIsOver++;
+	}
+	saveItAndNeverUseIt();
+
+    system ("Pause"); 
+}
