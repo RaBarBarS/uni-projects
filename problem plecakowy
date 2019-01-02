@@ -1,0 +1,171 @@
+// ThiefSupport.cpp: definiuje punkt wejścia dla aplikacji konsolowej.
+//
+
+#include "stdafx.h"
+#include <iostream>
+#include<fstream>
+#include<string>
+#include <iomanip>
+#include <time.h>
+#include <ctime>
+#include <algorithm>
+using namespace std;
+
+/////////////////////////////////////////////////
+string name = "test";
+clock_t start, stop;
+double czas;
+/////////////////////////////////////////////////
+
+struct rzecz {
+	int objetosc;
+	int watrosc;
+};
+
+struct maximum {
+	int wynik;
+	int kombinacja;
+};
+
+void wczytaj(int ilosc, rzecz tab[], rzecz tab2[]) {
+	int v1, v2, found, dlugosc;
+	string linia, halp;
+	fstream plik;
+
+	plik.open(name += ".txt", ios::in);
+	if (plik.good() == false) cout << "Nie mozna otworzyc pliku!" << endl;
+	else {
+		for (int i = 0; i < ilosc; i++) {
+			(getline(plik, linia));
+			found = linia.find(" ");
+			dlugosc = linia.length();
+			halp.insert(0, linia, 0, found);
+			v1 = atoi(halp.c_str());
+			halp.clear();
+			halp.insert(0, linia, found + 1, 6);
+			v2 = atoi(halp.c_str());
+			halp.clear();
+
+			tab[i].objetosc = v1;
+			tab[i].watrosc = v2;
+			tab2[i].objetosc = v1;
+			tab2[i].watrosc = v2;
+		}
+	}
+	plik.close();
+}
+
+void wyczerpujace(int ilosc,int objetosc, rzecz rzeczy[]) {
+	start = clock();
+	int a = 0, x = 0, p, wynik = 0, obj = 0;	//a-przechowuje reszte z dzielenia, x-liczba ktora zamieniamy, p-pomocnicza w zamianie
+	maximum maximum;	//wynik, obj-przechowuje wartosc danej kombinacji w plecaku
+	maximum.wynik = 0; maximum.kombinacja = 0;
+	int**tab = new int *[ilosc];		
+	for (int i = 0; i < ilosc; i++) {
+		tab[i] = new int[pow(2,ilosc)];
+	}
+
+	for (int i = 0; i < pow(2, ilosc); i++, x++) {
+		p = x;
+			for (int j = ilosc - 1; j >= 0; j--) {	//zamienia dziesiętną na dwójkową i wpisuje do tablicy
+				a = p % 2;
+				p = p / 2;
+				tab[j][i] = a;
+			}
+	}
+	int i = 0;
+	for (int j = 0; j < pow(2, ilosc); j++) {
+		for (i = 0; i < ilosc; i++) {
+			if (tab[i][j] == 1) {
+				wynik += rzeczy[i].watrosc;
+				obj += rzeczy[i].objetosc;
+			}
+		}
+		if (obj <= objetosc && wynik > maximum.wynik) {
+			maximum.wynik = wynik;
+			maximum.kombinacja = j;
+		}
+		wynik = 0; obj = 0;
+	}
+	stop = clock();
+	czas = (double)(stop - start) / CLOCKS_PER_SEC;
+	cout << "CZAS: " << czas << "s" << endl;
+
+	cout << "WYNIK: " << endl;
+	cout << "WARTOSC KRADZONYCH RZECZY: " << maximum.wynik << endl;
+	cout << "LISTA RZECZY: ";
+	for (i = 0; i < ilosc; i++) {
+		if (tab[i][maximum.kombinacja] == 1)
+			cout << i + 1 << ", ";
+	}
+	cout << endl;
+}
+
+void dynamiczne(int ilosc, int objetosc, rzecz rzeczy[]) {
+	start = clock();
+	
+	int**tab = new int *[ilosc + 1];
+	for (int i = 0; i <= ilosc; i++) {
+		tab[i] = new int[objetosc+1];
+	}
+	
+	for (int i = 0; i < objetosc + 1; i++) {	//wypełnienie pierwszego wiersza dla zerowej ilości elementów
+		tab[0][i] = 0;
+	}
+	for (int i = 1; i < ilosc + 1; i++) {	//wypełnienie pierwszej kolumny dla zerowej objętości
+		tab[i][0] = 0;
+	}
+
+	for (int i = 1; i < ilosc + 1; i++) {
+		for (int j = 0; j < objetosc + 1; j++) {
+			if (rzeczy[i-1].objetosc <= j) {
+				tab[i][j] = max(tab[i - 1][j], (tab[i - 1][j - rzeczy[i-1].objetosc] + rzeczy[i-1].watrosc));
+			}
+			else tab[i][j] = tab[i - 1][j];
+		}
+	}
+	stop = clock();
+	czas = (double)(stop - start) / CLOCKS_PER_SEC;
+	cout << "CZAS: " << czas << "s" << endl;
+
+	cout << "WYNIK:" << endl;
+	cout << "WARTOSC KRADZIONYCH RZECZY: " << tab[ilosc][objetosc] << endl;
+	cout << "LISTA RZECZY: ";
+	int i = ilosc, j = objetosc;
+	while ( i != 0 && j != 0) {
+		if (tab[i][j] != tab[i - 1][j]) {
+			cout << i << ", ";
+			j -= rzeczy[i-1].objetosc;
+			i--;
+		}
+		else i--;
+	}
+	cout << endl;
+}
+
+
+
+
+int main()
+{
+	int ilosc;
+	int objetosc;
+
+	cout << "DROGI ZLODZIEJU! ILE MASZ RZECZY DO WYBORU?: ";
+	cin >> ilosc; cout << endl;
+	cout << "JAK DUZY MASZ PLECAK?: ";
+	cin >> objetosc; cout << endl;
+
+	rzecz*tab = new rzecz [ilosc];
+	rzecz*tab2 = new rzecz[ilosc];
+	//TWORZENIE LISTY DOSTEPNYCH RZECZY
+	wczytaj(ilosc, tab, tab2);
+
+	cout << "WYCZERPUJACE" << endl;
+	wyczerpujace(ilosc, objetosc, tab);
+	cout << "DYNAMICZNE" << endl;
+	dynamiczne(ilosc, objetosc, tab2);
+
+	system("Pause");
+    return 0;
+}
